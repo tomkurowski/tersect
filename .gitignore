@@ -1,0 +1,26 @@
+# Build & compilation output
+/build
+/bin
+/dist
+
+# Test data
+/data
+/test
+
+# IDEs and editors
+/.idea
+.project
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+/.vscode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# System Files
+.DS_Store
+Thumbs.db

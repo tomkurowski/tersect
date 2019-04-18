@@ -1,0 +1,221 @@
+/*  vcf_parser.c
+
+    Copyright (C) 2019 Cranfield University
+
+    Author: Tomasz Kurowski <t.j.kurowski@cranfield.ac.uk>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE. */
+
+#include "vcf_parser.h"
+
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+#define VCF_NUM_COLUMNS     9
+
+#define CHROM_COLUMN        0
+#define POS_COLUMN          1
+#define ID_COLUMN           2
+#define REF_COLUMN          3
+#define ALT_COLUMN          4
+#define QUAL_COLUMN         5
+#define FILTER_COLUMN       6
+#define INFO_COLUMN         7
+#define FORMAT_COLUMN       8
+
+/**
+ * Size of the header line prior to the genotype list (46 characters).
+ * Sample names start past this position.
+ *
+ * #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t
+ *
+ */
+#define HEADER_LINE_SIZE    46
+
+/**
+ * Parsers metadata lines until the one starting with #CHROM
+ */
+static inline void load_metadata(VCF_PARSER *parser)
+{
+    parser->samples = malloc(sizeof *parser->samples);
+    char *line_context;
+    while (getline(&parser->line_buffer, &parser->buffer_size,
+           parser->file_handle) != -1) {
+        if (!strncmp(parser->line_buffer, "#CHROM", 6)) {
+            char *sample_columns = &parser->line_buffer[HEADER_LINE_SIZE];
+            char *sample_name = strtok_r(sample_columns, "\t\n", &line_context);
+            parser->samples[0] = strdup(sample_name);
+            parser->sample_num = 1;
+            while ((sample_name = strtok_r(NULL, "\t\n", &line_context))
+                   != NULL) {
+                ++parser->sample_num;
+                parser->samples = realloc(parser->samples,
+                                          parser->sample_num
+                                          * sizeof *parser->samples);
+                parser->samples[parser->sample_num - 1] = strdup(sample_name);
+            }
+            break;
+        }
+    }
+}
+
+static inline int get_genotype_code(char *gt)
+{
+    if (gt[0] == '0' && gt[2] == '0') {
+        return GENOTYPE_HOM_REF;
+    } else if (gt[0] == gt[2]) {
+        return GENOTYPE_HOM_ALT;
+    } else {
+        return GENOTYPE_HET;
+    }
+}
+
+int is_gzipped(const char *filename)
+{
+    FILE *fh = fopen(filename, "rb");
+    char byte1 = getc(fh);
+    char byte2 = getc(fh);
+    fclose(fh);
+    return byte1 == (char)0x1f && byte2 == (char)0x8b;
+}
+
+VCF_PARSER *init_parser(const char *filename, int flags)
+{
+    VCF_PARSER *parser = malloc(sizeof *parser);
+    if (access(filename, F_OK) != 0) {
+        return NULL;
+    }
+    if (is_gzipped(filename)) {
+        char *cmd = malloc(strlen(filename) + 8); // strlen of "zcat \'%s\'"
+        sprintf(cmd, "zcat \'%s\'", filename);
+        parser->file_handle = popen(cmd, "r");
+        free(cmd);
+    } else {
+        parser->file_handle = fopen(filename, "r");
+    }
+    if (parser->file_handle == NULL) {
+        return NULL;
+    }
+    strcpy(parser->filename, filename);
+    parser->line_buffer = NULL;
+    parser->buffer_size = 0;
+    load_metadata(parser);
+    parser->genotypes = malloc(parser->sample_num * sizeof *parser->genotypes);
+    parser->n_alts = 0;
+    parser->flags = flags;
+    parser->current_result = ALLELE_NOT_FETCHED;
+    return parser;
+}
+
+/* Compare most recent alleles from two parsers */
+int parser_allele_cmp(const void *a, const void *b)
+{
+    VCF_PARSER *parser_a = (VCF_PARSER *)a;
+    VCF_PARSER *parser_b = (VCF_PARSER *)b;
+    return allele_cmp(&parser_a->current_allele, &parser_b->current_allele);
+}
+
+/* Compare alleles (for sorting them alphabetically) */
+static inline int alt_comp(const void *a, const void *b)
+{
+    return strcmp(*(char *const *)b, *(char *const *)a);
+}
+
+int fetch_next_allele(VCF_PARSER *parser)
+{
+    // TODO: add error handling in case of incorrect file contents
+    // Fetching successive ALT alleles at the same position
+    while (parser->n_alts) {
+        // Pop ALT allele (LIFO)
+        parser->current_allele.alt = parser->alt_alleles[--(parser->n_alts)];
+        if (parser->flags & VCF_ONLY_SNPS) {
+            if (parser->current_allele.alt[1] != '\0') continue;
+        } else if (parser->flags & VCF_ONLY_INDELS) {
+            if (parser->current_allele.alt[1] == '\0'
+                && parser->current_allele.ref[1] == '\0') continue;
+        }
+        return parser->current_result = ALLELE_FETCHED;
+    }
+    char *columns[VCF_NUM_COLUMNS];
+    char *line_context;
+    while (getline(&parser->line_buffer,
+                   &parser->buffer_size,
+                   parser->file_handle) != -1) {
+        if (parser->line_buffer[0] != '#') {
+            columns[CHROM_COLUMN] = strtok_r(parser->line_buffer, "\t",
+                                             &line_context);
+            for (int i = 1; i < VCF_NUM_COLUMNS; ++i) {
+                columns[i] = strtok_r(NULL, "\t", &line_context);
+            }
+            strcpy(parser->current_chromosome, columns[CHROM_COLUMN]);
+            parser->current_allele.position = atoi(columns[POS_COLUMN]);
+            parser->current_allele.ref = columns[REF_COLUMN];
+
+            if (parser->flags & VCF_ONLY_SNPS) {
+                if (parser->current_allele.ref[1] != '\0') continue;
+            }
+
+            for (size_t i = 0; i < parser->sample_num; ++i) {
+                char *gt = strtok_r(NULL, "\t", &line_context);
+                parser->genotypes[i] = get_genotype_code(gt);
+            }
+            parser->alt_alleles[0] = strtok_r(columns[ALT_COLUMN], ",",
+                                              &parser->allele_context);
+            parser->n_alts = 1;
+            while ((parser->alt_alleles[parser->n_alts]
+                    = strtok_r(NULL, ",", &(parser->allele_context)))
+                   != NULL) {
+                ++(parser->n_alts);
+            }
+
+            qsort(parser->alt_alleles, parser->n_alts,
+                  sizeof(char *), alt_comp);
+
+            return fetch_next_allele(parser);
+        }
+    }
+    return parser->current_result = ALLELE_NOT_FETCHED;
+}
+
+void goto_next_chromosome(VCF_PARSER *parser)
+{
+    char previous_chromosome[MAX_CHROMOSOME_NAME_LENGTH];
+    strcpy(previous_chromosome, parser->current_chromosome);
+    while (fetch_next_allele(parser) != ALLELE_NOT_FETCHED) {
+        if (strcmp(parser->current_chromosome, previous_chromosome)) {
+            // Reached next chromosome
+            return;
+        }
+    }
+}
+
+void close_parser(VCF_PARSER *parser)
+{
+    if (parser->line_buffer != NULL) {
+        free(parser->line_buffer);
+    }
+    free(parser->genotypes);
+    for (size_t i = 0; i < parser->sample_num; ++i) {
+        free(parser->samples[i]);
+    }
+    free(parser->samples);
+    fclose(parser->file_handle);
+    free(parser);
+}
