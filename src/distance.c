@@ -279,7 +279,6 @@ static inline void dealloc_distance_matrix(struct distance_matrix *matrix)
 {
     for (size_t i = 0; i < matrix->nrows; ++i) {
         free(matrix->row_samples[i]);
-        free(matrix->distance[i]);
     }
     free(matrix->row_samples);
     if (!matrix->symmetric) {
@@ -287,6 +286,12 @@ static inline void dealloc_distance_matrix(struct distance_matrix *matrix)
             free(matrix->col_samples[i]);
         }
         free(matrix->col_samples);
+    }
+    for (size_t i = 0; i < matrix->nmatrices; ++i) {
+        for (size_t j = 0; j < matrix->nrows; ++j) {
+            free(matrix->distance[i][j]);
+        }
+        free(matrix->distance[i]);
     }
     free(matrix->distance);
 }
