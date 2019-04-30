@@ -672,14 +672,15 @@ void bitarray_shrinkwrap(struct bitarray *ba)
 }
 
 /**
- * Extracts region from bit array starting from the (*index) word and assuming
- * (*ncompressed) words were compressed (in fill words) before (*index).
+ * Extracts region from bit array contents starting from the (*index) word and
+ * assuming (*ncompressed) words were compressed (through fill words)
+ * before (*index).
  * This is helpful for speeding up the extraction of successive regions from the
  * same bit array, e.g. in binning, as we keep track of the number of traversed
  * words instead of traversing from the beginning for each bin.
  */
 static inline void extract_region(struct bitarray *dest_ba,
-                                  const struct bitarray *src_ba,
+                                  const bitarray_word *src_array,
                                   const struct bitarray_interval *region,
                                   size_t *index, size_t *ncompressed)
 {
@@ -691,34 +692,33 @@ static inline void extract_region(struct bitarray *dest_ba,
     // Shifting the internal indices by the number of preceding fill words
     size_t i;
     for (i = *index; i <= internal_end_index; ++i) {
-        if (src_ba->array[i] & MSB) continue; // no compression
+        if (src_array[i] & MSB) continue; // no compression
         if (internal_start_index >= i) {
-            if (internal_start_index <= i + src_ba->array[i]) {
-                dest_ba->start_mask = src_ba->array[i]
-                                      - (internal_start_index - i);
+            if (internal_start_index <= i + src_array[i]) {
+                dest_ba->start_mask = src_array[i] - (internal_start_index - i);
                 internal_start_index = i;
             } else {
-                internal_start_index -= src_ba->array[i];
+                internal_start_index -= src_array[i];
             }
         }
-        if (internal_end_index <= i + src_ba->array[i]) {
+        if (internal_end_index <= i + src_array[i]) {
             dest_ba->end_mask = internal_end_index - i;
             internal_end_index = i;
         } else {
-            internal_end_index -= src_ba->array[i];
+            internal_end_index -= src_array[i];
         }
-        *ncompressed += src_ba->array[i];
+        *ncompressed += src_array[i];
     }
     *index = i;
     dest_ba->size = 1 + internal_end_index - internal_start_index;
     dest_ba->last_word = 0;
     dest_ba->ncompressed = *ncompressed;
-    dest_ba->array = &(src_ba->array[internal_start_index]);
-    if (src_ba->array[internal_start_index] & MSB) {
+    dest_ba->array = &(src_array[internal_start_index]);
+    if (src_array[internal_start_index] & MSB) {
         dest_ba->start_mask = WORD_MAX << region->start_index
                                           % bitarray_word_capacity;
     }
-    if (src_ba->array[internal_end_index] & MSB) {
+    if (src_array[internal_end_index] & MSB) {
         dest_ba->end_mask = WORD_MAX >> (bitarray_word_capacity
                                          - region->end_index
                                            % bitarray_word_capacity)
@@ -741,7 +741,8 @@ void bitarray_extract_bins(struct bitarray *dest_bas,
     size_t index = 0;
     size_t ncompressed = 0;
     for (size_t i = 0; i < nbins; ++i) {
-        extract_region(&dest_bas[i], src_ba, &bins[i], &index, &ncompressed);
+        extract_region(&dest_bas[i], src_ba->array, &bins[i],
+                       &index, &ncompressed);
     }
 }
 
@@ -764,7 +765,7 @@ void bitarray_extract_region(struct bitarray *dest_ba,
 }
 
 struct bitarray_bin_iterator {
-    const struct bitarray *src_ba;
+    const bitarray_word *src_array;
     size_t nbins;
     const struct bitarray_interval *bins;
     size_t index;
@@ -776,7 +777,7 @@ ba_bin_it *init_bitarray_bin_iterator(const struct bitarray *src_ba,
                                       const struct bitarray_interval *bins)
 {
     struct bitarray_bin_iterator *it = calloc(1, sizeof *it);
-    it->src_ba = src_ba;
+    it->src_array = src_ba->array;
     it->nbins = nbins;
     it->bins = bins;
     return it;
@@ -785,7 +786,8 @@ ba_bin_it *init_bitarray_bin_iterator(const struct bitarray *src_ba,
 void bitarray_bin_iterator_next(ba_bin_it *it, struct bitarray *out)
 {
     if (it->nbins) {
-        extract_region(out, it->src_ba, it->bins, &it->index, &it->ncompressed);
+        extract_region(out, it->src_array, it->bins,
+                       &it->index, &it->ncompressed);
         // Move to next bin
         if (--(it->nbins)) {
             ++(it->bins);
