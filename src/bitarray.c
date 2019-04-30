@@ -762,3 +762,42 @@ void bitarray_extract_region(struct bitarray *dest_ba,
 {
     bitarray_extract_bins(dest_ba, src_ba, 1, region);
 }
+
+struct bitarray_bin_iterator {
+    const struct bitarray *src_ba;
+    size_t nbins;
+    const struct bitarray_interval *bins;
+    size_t index;
+    size_t ncompressed;
+};
+
+ba_bin_it *init_bitarray_bin_iterator(const struct bitarray *src_ba,
+                                      size_t nbins,
+                                      const struct bitarray_interval *bins)
+{
+    struct bitarray_bin_iterator *it = calloc(1, sizeof *it);
+    it->src_ba = src_ba;
+    it->nbins = nbins;
+    it->bins = bins;
+    return it;
+}
+
+void bitarray_bin_iterator_next(ba_bin_it *it, struct bitarray *out)
+{
+    if (it->nbins) {
+        extract_region(out, it->src_ba, it->bins, &it->index, &it->ncompressed);
+        // Move to next bin
+        if (--(it->nbins)) {
+            ++(it->bins);
+        } else {
+            it->bins = NULL;
+        }
+    } else {
+        out = NULL;
+    }
+}
+
+void free_bitarray_bin_iterator(ba_bin_it *it)
+{
+    free(it);
+}

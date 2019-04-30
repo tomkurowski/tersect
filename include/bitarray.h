@@ -64,6 +64,18 @@ struct bitarray_interval {
     uint64_t end_index;
 };
 
+/**
+ * Iterator for traversing bins (successive intervals of a bit array).
+ * Caution: Modifying the source bit array or bin interval structures will
+ * invalidate the iterator!
+ */
+typedef struct bitarray_bin_iterator ba_bin_it;
+ba_bin_it *init_bitarray_bin_iterator(const struct bitarray *src_ba,
+                                      size_t nbins,
+                                      const struct bitarray_interval *bins);
+void bitarray_bin_iterator_next(ba_bin_it *it, struct bitarray *out);
+void free_bitarray_bin_iterator(ba_bin_it *it);
+
 /*
  * Initialisation/allocation, zeroing and deallocation routines.
  */
