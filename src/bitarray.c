@@ -678,9 +678,12 @@ void bitarray_shrinkwrap(struct bitarray *ba)
  * This is helpful for speeding up the extraction of successive regions from the
  * same bit array, e.g. in binning, as we keep track of the number of traversed
  * words instead of traversing from the beginning for each bin.
+ *
+ * TODO: make src_array const and bit array contents immutable (const struct
+ * elements).
  */
 static inline void extract_region(struct bitarray *dest_ba,
-                                  const bitarray_word *src_array,
+                                  bitarray_word *src_array,
                                   const struct bitarray_interval *region,
                                   size_t *index, size_t *ncompressed)
 {
@@ -764,8 +767,12 @@ void bitarray_extract_region(struct bitarray *dest_ba,
     bitarray_extract_bins(dest_ba, src_ba, 1, region);
 }
 
+/*
+ * TODO: make src_array const and bit array contents immutable (const struct
+ * elements).
+ */
 struct bitarray_bin_iterator {
-    const bitarray_word *src_array;
+    bitarray_word *src_array;
     size_t nbins;
     const struct bitarray_interval *bins;
     size_t index;
