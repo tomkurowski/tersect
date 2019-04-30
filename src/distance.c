@@ -136,38 +136,72 @@ static inline void calculate_distance_matrix(size_t nrows,
     }
 }
 
+static inline void build_bin_distance_matrix(const tersect_db *tdb,
+                                             size_t nrows,
+                                             const struct genome *row_samples,
+                                             size_t ncols,
+                                             const struct genome *col_samples,
+                                             uint32_t bin_size,
+                                             const struct genomic_interval *region,
+                                             struct distance_matrix *matrix)
+{
+    size_t nbins;
+    struct tersect_db_interval *bins;
+
+    tersect_db_get_bin_intervals(tdb, region, bin_size,
+                                 &nbins, &bins);
+    init_distance_matrix(nbins, bin_size, nrows, row_samples,
+                         ncols, col_samples, matrix);
+
+    struct bitarray *row_bas = malloc(nrows * sizeof *row_bas);
+    struct bitarray *col_bas = malloc(ncols * sizeof *col_bas);
+
+    for (size_t i = 0; i < nbins; ++i) {
+        // Extracting region bitarrays for rows and cols
+        for (size_t j = 0; j < nrows; ++j) {
+            struct bitarray tmp;
+            tersect_db_get_bitarray(tdb, &row_samples[j],
+                                    &bins[i].chromosome, &tmp);
+            bitarray_extract_region(&row_bas[j], &tmp, &bins[i].interval);
+        }
+        for (size_t j = 0; j < ncols; ++j) {
+            struct bitarray tmp;
+            tersect_db_get_bitarray(tdb, &col_samples[j],
+                                    &bins[i].chromosome, &tmp);
+            bitarray_extract_region(&col_bas[j], &tmp, &bins[i].interval);
+        }
+        // Calculate distances
+        calculate_distance_matrix(nrows, row_samples, row_bas,
+                                  ncols, col_samples, col_bas,
+                                  matrix->symmetric,
+                                  matrix->distance[i]);
+    }
+    free(bins);
+    free(row_bas);
+    free(col_bas);
+}
+
 static inline void build_distance_matrix(const tersect_db *tdb,
                                          size_t nrows,
                                          const struct genome *row_samples,
                                          size_t ncols,
                                          const struct genome *col_samples,
-                                         uint32_t bin_size,
                                          size_t nregions,
                                          const struct genomic_interval *regions,
                                          struct distance_matrix *matrix)
 {
-    size_t nintervals;
     struct tersect_db_interval *intervals;
-    if (bin_size) {
-        tersect_db_get_bin_intervals(tdb, regions, bin_size,
-                                     &nintervals, &intervals);
-        init_distance_matrix(nintervals, bin_size, nrows, row_samples,
-                             ncols, col_samples, matrix);
-    } else {
-        // No binning
-        nintervals = nregions;
-        intervals = malloc(nintervals * sizeof *intervals);
-        for (size_t i = 0; i < nregions; ++i) {
-            tersect_db_get_interval(tdb, &regions[i], &intervals[i]);
-        }
-        init_distance_matrix(1, 0, nrows, row_samples, ncols, col_samples,
-                             matrix);
+
+    intervals = malloc(nregions * sizeof *intervals);
+    for (size_t i = 0; i < nregions; ++i) {
+        tersect_db_get_interval(tdb, &regions[i], &intervals[i]);
     }
+    init_distance_matrix(1, 0, nrows, row_samples, ncols, col_samples, matrix);
 
     struct bitarray *row_bas = malloc(nrows * sizeof *row_bas);
     struct bitarray *col_bas = malloc(ncols * sizeof *col_bas);
 
-    for (size_t i = 0; i < nintervals; ++i) {
+    for (size_t i = 0; i < nregions; ++i) {
         // Extracting region bitarrays for rows and cols
         for (size_t j = 0; j < nrows; ++j) {
             struct bitarray tmp;
@@ -185,7 +219,7 @@ static inline void build_distance_matrix(const tersect_db *tdb,
         calculate_distance_matrix(nrows, row_samples, row_bas,
                                   ncols, col_samples, col_bas,
                                   matrix->symmetric,
-                                  matrix->distance[bin_size ? i : 0]);
+                                  matrix->distance[0]);
     }
     free(intervals);
     free(row_bas);
@@ -425,10 +459,10 @@ error_t tersect_distance(int argc, char **argv)
 
     if (!binning) {
         build_distance_matrix(tdb, count_a, samples_a, count_b, samples_b,
-                              0, nregions, regions, &matrix);
+                              nregions, regions, &matrix);
     } else {
-        build_distance_matrix(tdb, count_a, samples_a, count_b, samples_b,
-                              bin_size, 1, regions, &matrix);
+        build_bin_distance_matrix(tdb, count_a, samples_a, count_b, samples_b,
+                                  bin_size, regions, &matrix);
     }
 
     if (local_flags & JSON_OUTPUT) {
