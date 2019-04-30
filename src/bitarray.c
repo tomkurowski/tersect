@@ -672,19 +672,16 @@ void bitarray_shrinkwrap(struct bitarray *ba)
 }
 
 /**
- * Extract a bit array representing a region of a larger bit array.
- *
- * If an extracted region starts/ends on a literal word, the start/end mask is
- * a normal mask on that word.
- * If an extracted region starts/ends on a fill woed, the start/end mask is the
- * number of words in that fill included in the region minus one.
- * e.g. with a 64-bit word, if the first word is a zero-fill of ten words
- * (i.e. 630 consecutive 0 bits) and the region includes all 630, the start_mask
- * will be 9 (10 - 1).
+ * Extracts region from bit array starting from the (*index) word and assuming
+ * (*ncompressed) words were compressed (in fill words) before (*index).
+ * This is helpful for speeding up the extraction of successive regions from the
+ * same bit array, e.g. in binning, as we keep track of the number of traversed
+ * words instead of traversing from the beginning for each bin.
  */
-void bitarray_extract_region(struct bitarray *dest_ba,
-                             const struct bitarray *src_ba,
-                             const struct bitarray_interval *region)
+static inline void extract_region(struct bitarray *dest_ba,
+                                  const struct bitarray *src_ba,
+                                  const struct bitarray_interval *region,
+                                  size_t *index, size_t *ncompressed)
 {
     // The 'internal' indices are in terms of the storage word type
     uint64_t internal_start_index = region->start_index
@@ -692,8 +689,8 @@ void bitarray_extract_region(struct bitarray *dest_ba,
     uint64_t internal_end_index = region->end_index
                                   / bitarray_word_capacity;
     // Shifting the internal indices by the number of preceding fill words
-    size_t ncompressed = 0;
-    for (size_t i = 0; i <= internal_end_index; ++i) {
+    size_t i;
+    for (i = *index; i <= internal_end_index; ++i) {
         if (src_ba->array[i] & MSB) continue; // no compression
         if (internal_start_index >= i) {
             if (internal_start_index <= i + src_ba->array[i]) {
@@ -710,11 +707,12 @@ void bitarray_extract_region(struct bitarray *dest_ba,
         } else {
             internal_end_index -= src_ba->array[i];
         }
-        ncompressed += src_ba->array[i];
+        *ncompressed += src_ba->array[i];
     }
+    *index = i;
     dest_ba->size = 1 + internal_end_index - internal_start_index;
     dest_ba->last_word = 0;
-    dest_ba->ncompressed = ncompressed;
+    dest_ba->ncompressed = *ncompressed;
     dest_ba->array = &(src_ba->array[internal_start_index]);
     if (src_ba->array[internal_start_index] & MSB) {
         dest_ba->start_mask = WORD_MAX << region->start_index
@@ -726,4 +724,24 @@ void bitarray_extract_region(struct bitarray *dest_ba,
                                            % bitarray_word_capacity)
                             | MSB;
     }
+}
+
+/**
+ * Extract a bit array representing a region of a larger bit array.
+ *
+ * If an extracted region starts/ends on a literal word, the start/end mask is
+ * a normal mask on that word.
+ * If an extracted region starts/ends on a fill woed, the start/end mask is the
+ * number of words in that fill included in the region minus one.
+ * e.g. with a 64-bit word, if the first word is a zero-fill of ten words
+ * (i.e. 630 consecutive 0 bits) and the region includes all 630, the start_mask
+ * will be 9 (10 - 1).
+ */
+void bitarray_extract_region(struct bitarray *dest_ba,
+                             const struct bitarray *src_ba,
+                             const struct bitarray_interval *region)
+{
+    size_t index = 0;
+    size_t ncompressed = 0;
+    extract_region(dest_ba, src_ba, region, &index, &ncompressed);
 }
