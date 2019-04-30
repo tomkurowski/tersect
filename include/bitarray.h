@@ -101,6 +101,10 @@ uint64_t bitarray_weight(const struct bitarray *ba);
 void bitarray_extract_region(struct bitarray *dest_ba,
                              const struct bitarray *src_ba,
                              const struct bitarray_interval *region);
+void bitarray_extract_bins(struct bitarray *dest_bas,
+                           const struct bitarray *src_ba,
+                           size_t nbins,
+                           const struct bitarray_interval *bins);
 
 /*
  * Routines for manipulating individual bits.

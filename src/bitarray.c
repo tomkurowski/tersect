@@ -727,6 +727,25 @@ static inline void extract_region(struct bitarray *dest_ba,
 }
 
 /**
+ * Extract successive bit array regions (bins) from a single bit array.
+ * The start index of each region should be 1 higher than the end index of the
+ * preceding region.
+ * Does not allocate memory. The caller should ensure the dest_bas output array
+ * is at least nbins elements long.
+ */
+void bitarray_extract_bins(struct bitarray *dest_bas,
+                           const struct bitarray *src_ba,
+                           size_t nbins,
+                           const struct bitarray_interval *bins)
+{
+    size_t index = 0;
+    size_t ncompressed = 0;
+    for (size_t i = 0; i < nbins; ++i) {
+        extract_region(&dest_bas[i], src_ba, &bins[i], &index, &ncompressed);
+    }
+}
+
+/**
  * Extract a bit array representing a region of a larger bit array.
  *
  * If an extracted region starts/ends on a literal word, the start/end mask is
@@ -741,7 +760,5 @@ void bitarray_extract_region(struct bitarray *dest_ba,
                              const struct bitarray *src_ba,
                              const struct bitarray_interval *region)
 {
-    size_t index = 0;
-    size_t ncompressed = 0;
-    extract_region(dest_ba, src_ba, region, &index, &ncompressed);
+    bitarray_extract_bins(dest_ba, src_ba, 1, region);
 }
