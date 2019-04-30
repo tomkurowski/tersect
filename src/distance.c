@@ -150,6 +150,31 @@ static inline void build_bin_distance_matrix(const tersect_db *tdb,
 
     tersect_db_get_bin_intervals(tdb, region, bin_size,
                                  &nbins, &bins);
+
+    // The chromosome is the same for all bins
+    struct chromosome *chrom = &bins[0].chromosome;
+
+    // Extract bit array intevals
+    struct bitarray_interval *ba_intervals = malloc(nbins
+                                                    * sizeof *ba_intervals);
+    for (size_t i = 0; i < nbins; ++i) {
+        ba_intervals[i] = bins[i].interval;
+    }
+
+    // Set up bin iterators for each row/column sample
+    ba_bin_it **row_its = malloc(nrows * sizeof *row_its);
+    for (size_t i = 0; i < nrows; ++i) {
+        struct bitarray tmp;
+        tersect_db_get_bitarray(tdb, &row_samples[i], chrom, &tmp);
+        row_its[i] = init_bitarray_bin_iterator(&tmp, nbins, ba_intervals);
+    }
+    ba_bin_it **col_its = malloc(ncols * sizeof *col_its);
+    for (size_t i = 0; i < ncols; ++i) {
+        struct bitarray tmp;
+        tersect_db_get_bitarray(tdb, &col_samples[i], chrom, &tmp);
+        col_its[i] = init_bitarray_bin_iterator(&tmp, nbins, ba_intervals);
+    }
+
     init_distance_matrix(nbins, bin_size, nrows, row_samples,
                          ncols, col_samples, matrix);
 
@@ -159,16 +184,10 @@ static inline void build_bin_distance_matrix(const tersect_db *tdb,
     for (size_t i = 0; i < nbins; ++i) {
         // Extracting region bitarrays for rows and cols
         for (size_t j = 0; j < nrows; ++j) {
-            struct bitarray tmp;
-            tersect_db_get_bitarray(tdb, &row_samples[j],
-                                    &bins[i].chromosome, &tmp);
-            bitarray_extract_region(&row_bas[j], &tmp, &bins[i].interval);
+            bitarray_bin_iterator_next(row_its[j], &row_bas[j]);
         }
         for (size_t j = 0; j < ncols; ++j) {
-            struct bitarray tmp;
-            tersect_db_get_bitarray(tdb, &col_samples[j],
-                                    &bins[i].chromosome, &tmp);
-            bitarray_extract_region(&col_bas[j], &tmp, &bins[i].interval);
+            bitarray_bin_iterator_next(col_its[j], &col_bas[j]);
         }
         // Calculate distances
         calculate_distance_matrix(nrows, row_samples, row_bas,
@@ -179,6 +198,15 @@ static inline void build_bin_distance_matrix(const tersect_db *tdb,
     free(bins);
     free(row_bas);
     free(col_bas);
+    for (size_t i = 0; i < nrows; ++i) {
+        free_bitarray_bin_iterator(row_its[i]);
+    }
+    free(row_its);
+    for (size_t i = 0; i < ncols; ++i) {
+        free_bitarray_bin_iterator(col_its[i]);
+    }
+    free(col_its);
+    free(ba_intervals);
 }
 
 static inline void build_distance_matrix(const tersect_db *tdb,
