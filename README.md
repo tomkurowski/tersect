@@ -97,7 +97,7 @@ Please note that although from a technical point of you, Tersect would work even
 
 **Example:**
 
-The command below builds a Tersect index file named *index.tsi* which includes variants from all *.vcf.gz* files in the *data* directory. Depending on the input size this can take several minutes.
+The command below builds a Tersect index file named *tomato.tsi* which includes variants from all *.vcf.gz* files in the *data* directory. Depending on the input size this can take several minutes.
 
 ```console
 foo@bar:~$ tersect build tomato.tsi ./data/*.vcf.gz
