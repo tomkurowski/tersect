@@ -91,13 +91,11 @@ The second index contains tomato genomic variant data for 360 tomato accessions 
 
 ## Building a Tersect index
 
-You can build your own Tersect index based on a set of VCF files using the `tersect build` command. You need to provide a name for your index file (a .tsi extension will be added if you omit it) as the first argument, followed by any number of input VCF files (which may be compressed using gzip) to be included in the index. 
-
-Please note that although from a technical point of you, Tersect would work even if your VCF files were called against different reference genomes or versions of the same reference, the biological context of your theoretical operations won't be accurate (depending on how different the reference genomes used). Therefore, we strongly recommend using VCF files called against the same reference version.
+You can build your own Tersect index based on a set of VCF files using the `tersect build` command. You need to provide a name for your index file (a .tsi extension will be added if you omit it) as the first argument, followed by any number of input VCF files (which may be compressed using gzip) to be included in the index.
 
 **Example:**
 
-The command below builds a Tersect index file named *tomato.tsi* which includes variants from all *.vcf.gz* files in the *data* directory. Depending on the input size this can take several minutes.
+The command below builds a Tersect index file named *index.tsi* which includes variants from all *.vcf.gz* files in the *data* directory. Depending on the input size this can take several minutes.
 
 ```console
 foo@bar:~$ tersect build tomato.tsi ./data/*.vcf.gz
@@ -119,8 +117,6 @@ TS-110	S.lyc B TS-110
 ```
 
 You can also modify sample names in an existing Tersect index file by using the `tersect rename` command.
-
-It is worth noting that the descriptive fields of the VCF files are not stored within the Tersect database. The reason for that is once an operation is performed on two of more VCF files, these fields will be discarded anyway as they are genotype-specific. However, you should be able to retrieve it back by intesecting Tersect's output with any VCF files from this list.
 
 ## Inspecting a Tersect index
 
