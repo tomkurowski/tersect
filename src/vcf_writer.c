@@ -93,7 +93,7 @@ void vcf_print_bitarray(const tersect_db *tdb, const struct bitarray *ba,
                         const struct tersect_db_interval *ti)
 {
     size_t allele_num;
-    uint64_t *allele_indices;
+    size_t *allele_indices;
     bitarray_get_set_indices(ba, &allele_num, &allele_indices);
     for (size_t i = 0; i < allele_num; ++i) {
         print_snv(tdb, ti->variants[allele_indices[i]], ti->chromosome.name);
