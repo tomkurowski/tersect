@@ -68,7 +68,7 @@ static void usage(FILE *stream)
             "    -a, --a-match STR       name pattern to be matched by samples in set A\n"
             "    -b, --b-match STR       name pattern to be matched by samples in set B\n"
             "    --ac STR                variants required for sample inclusion in set A\n"
-            "    --ac STR                variants required for sample inclusion in set B\n"
+            "    --bc STR                variants required for sample inclusion in set B\n"
             "    --a-list-file STR       file containing list of names to include in set A\n"
             "    --b-list-file STR       file containing list of names to include in set B\n"
             "    --list-file STR         file containing list of names to include in any set\n"
