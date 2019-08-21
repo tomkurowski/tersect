@@ -50,7 +50,8 @@ struct error_desc error_desc[] = {
     { E_VIEW_NO_QUERY, "No set query specified"},
     { E_RENAME_NOPEN, "Coult not open specified name file"},
     { E_RENAME_PARSE, "Name file could not be parsed"},
-    { E_DIST_BIN_REGIONS, "Only one region allowed if binning is enabled"}
+    { E_DIST_BIN_REGIONS, "Only one region allowed if binning is enabled"},
+    { E_DIST_LIST_NOPEN, "Match string list file could not be opened"}
 };
 
 void report_error(error_t code) {

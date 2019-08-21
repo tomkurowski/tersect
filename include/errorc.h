@@ -50,6 +50,7 @@ typedef enum error_t {
     E_RENAME_NOPEN = 9000,
     E_RENAME_PARSE = 9001,
     E_DIST_BIN_REGIONS = 10000,
+    E_DIST_LIST_NOPEN = 10001
 } error_t;
 
 extern struct error_desc {

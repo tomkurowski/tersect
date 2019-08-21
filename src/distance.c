@@ -40,8 +40,11 @@ SOFTWARE. */
 static int local_flags = 0;
 
 /* Argument options without a short equivalent */
-#define A_CONTAINS      1000
-#define B_CONTAINS      1001
+#define A_CONTAINS           1000
+#define B_CONTAINS           1001
+#define A_MATCHLIST_FILE     1002
+#define B_MATCHLIST_FILE     1003
+#define MATCHLIST_FILE       1004
 
 struct distance_matrix {
     char **row_samples;
@@ -66,6 +69,9 @@ static void usage(FILE *stream)
             "    -b, --b-match STR       name pattern to be matched by samples in set B\n"
             "    --ac STR                variants required for sample inclusion in set A\n"
             "    --ac STR                variants required for sample inclusion in set B\n"
+            "    --a-list-file STR       file containing list of names to include in set A\n"
+            "    --b-list-file STR       file containing list of names to include in set B\n"
+            "    --list-file STR         file containing list of names to include in any set\n"
             "    -c, --contains STR      variants required for sample inclusion in any set\n"
             "    -m, --match STR         name pattern to be matched by samples in any set\n"
             "    -B, --bin-size INT      size of bins into which the region is split\n"
@@ -358,6 +364,63 @@ static inline void dealloc_distance_matrix(struct distance_matrix *matrix)
     free(matrix->distance);
 }
 
+/**
+ * Merge the provided sample name match string array and match strings
+ * contained in the specified files into a single match string array.
+ * Allocated memory to the output
+ */
+static inline error_t merge_match_queries(size_t nmatch,
+                                          const char *const match[],
+                                          size_t nfiles,
+                                          const char *const filenames[],
+                                          size_t *nmerged, char ***merged)
+{
+    *nmerged = nmatch;
+    *merged = calloc(nmatch, sizeof **merged);
+    if (*merged == NULL) return E_ALLOC;
+    for (size_t i = 0; i < nmatch; ++i) {
+        if (match[i] != NULL) {
+            (*merged)[i] = strdup(match[i]);
+            if ((*merged)[i] == NULL) {
+                free(*merged);
+                return E_ALLOC;
+            }
+        } else {
+            (*merged)[i] = NULL;
+        }
+    }
+
+    for (size_t i = 0; i < nfiles; ++i) {
+        if (filenames[i] == NULL) continue;
+        FILE *fh = fopen(filenames[i], "r");
+        if (fh == NULL) return E_DIST_LIST_NOPEN;
+        char *line_buffer = NULL;
+        size_t buffer_size = 0;
+        while (getline(&line_buffer, &buffer_size, fh) != -1) {
+            ++(*nmerged);
+            *merged = realloc(*merged, *nmerged * sizeof **merged);
+            if (*merged == NULL) return E_ALLOC;
+            (*merged)[*nmerged - 1] = strndup(line_buffer,
+                                              strlen(line_buffer) - 1);
+        }
+        fclose(fh);
+        if (line_buffer != NULL) {
+            free(line_buffer);
+        }
+    }
+    return SUCCESS;
+}
+
+static inline void free_match_queries(size_t nmerged, char **merged)
+{
+    for (size_t i = 0; i < nmerged; ++i) {
+        if (merged[i] != NULL) {
+            free(merged[i]);
+        }
+    }
+    free(merged);
+}
+
 error_t tersect_distance(int argc, char **argv)
 {
     error_t rc = SUCCESS;
@@ -366,10 +429,13 @@ error_t tersect_distance(int argc, char **argv)
     size_t nregions = 0;
     char *a_match = NULL;
     char *a_contains = NULL;
+    char *a_matchlist_filename = NULL;
     char *b_match = NULL;
     char *b_contains = NULL;
+    char *b_matchlist_filename = NULL;
     char *contains = NULL;
     char *match = NULL;
+    char *matchlist_filename = NULL;
     bool binning = false;
     uint32_t bin_size = 0;
     bool symmetric = true;
@@ -378,6 +444,9 @@ error_t tersect_distance(int argc, char **argv)
         {"b-match", required_argument, NULL, 'b'},
         {"ac", required_argument, NULL, A_CONTAINS},
         {"bc", required_argument, NULL, B_CONTAINS},
+        {"a-list-file", required_argument, NULL, A_MATCHLIST_FILE},
+        {"b-list-file", required_argument, NULL, B_MATCHLIST_FILE},
+        {"list-file", required_argument, NULL, MATCHLIST_FILE},
         {"contains", required_argument, NULL, 'c'},
         {"match", required_argument, NULL, 'm'},
         {"help", no_argument, NULL, 'h'},
@@ -404,6 +473,15 @@ error_t tersect_distance(int argc, char **argv)
             break;
         case B_CONTAINS:
             b_contains = optarg;
+            break;
+        case A_MATCHLIST_FILE:
+            a_matchlist_filename = optarg;
+            break;
+        case B_MATCHLIST_FILE:
+            b_matchlist_filename = optarg;
+            break;
+        case MATCHLIST_FILE:
+            matchlist_filename = optarg;
             break;
         case 'c':
             contains = optarg;
@@ -436,7 +514,8 @@ error_t tersect_distance(int argc, char **argv)
         region_strings = argv;
         nregions = argc;
     }
-    if ((a_match != b_match) || (a_contains != b_contains)) {
+    if ((a_match != b_match) || (a_contains != b_contains)
+        || (a_matchlist_filename != b_matchlist_filename)) {
         // Force JSON for non-symmetric distance matrices
         local_flags |= JSON_OUTPUT;
         symmetric = false;
@@ -461,26 +540,41 @@ error_t tersect_distance(int argc, char **argv)
 
     char *contains_queries_a[2] = { contains, a_contains };
     char *contains_queries_b[2] = { contains, b_contains };
-    char *match_queries_a[2] = { match, a_match };
-    char *match_queries_b[2] = { match, b_match };
+
+    size_t nmatches_a;
+    char **merged_matches_a;
+    rc = merge_match_queries(2, (const char *const[]){ match, a_match },
+                             2, (const char *const[]){ matchlist_filename,
+                                                       a_matchlist_filename },
+                             &nmatches_a, &merged_matches_a);
+    if (rc != SUCCESS) goto cleanup_2;
+
+    size_t nmatches_b;
+    char **merged_matches_b;
+    rc = merge_match_queries(2, (const char *const[]){ match, b_match },
+                             2, (const char *const[]){ matchlist_filename,
+                                                       b_matchlist_filename },
+                             &nmatches_b, &merged_matches_b);
+    if (rc != SUCCESS) goto cleanup_3;
 
     size_t count_a;
     size_t count_b;
     struct genome *samples_a;
     struct genome *samples_b;
 
-    rc = tersect_db_get_genomes(tdb, 2, match_queries_a, 2, contains_queries_a,
+    rc = tersect_db_get_genomes(tdb, nmatches_a, merged_matches_a,
+                                2, contains_queries_a,
                                 &count_a, &samples_a);
-    if (rc != SUCCESS) goto cleanup_2;
+    if (rc != SUCCESS) goto cleanup_4;
 
     if (symmetric) {
         samples_b = samples_a;
         count_b = count_a;
     } else {
-        rc = tersect_db_get_genomes(tdb,
-                                    2, match_queries_b, 2, contains_queries_b,
+        rc = tersect_db_get_genomes(tdb, nmatches_b, merged_matches_b,
+                                    2, contains_queries_b,
                                     &count_b, &samples_b);
-        if (rc != SUCCESS) goto cleanup_3;
+        if (rc != SUCCESS) goto cleanup_5;
     }
 
     struct distance_matrix matrix;
@@ -504,8 +598,12 @@ error_t tersect_distance(int argc, char **argv)
     if (samples_b != samples_a) {
         free(samples_b);
     }
-cleanup_3:
+cleanup_5:
     free(samples_a);
+cleanup_4:
+    free(merged_matches_b);
+cleanup_3:
+    free(merged_matches_a);
 cleanup_2:
     free(regions);
 cleanup_1:
