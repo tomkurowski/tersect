@@ -601,9 +601,9 @@ error_t tersect_distance(int argc, char **argv)
 cleanup_5:
     free(samples_a);
 cleanup_4:
-    free(merged_matches_b);
+    free_match_queries(nmatches_b, merged_matches_b);
 cleanup_3:
-    free(merged_matches_a);
+    free_match_queries(nmatches_a, merged_matches_a);
 cleanup_2:
     free(regions);
 cleanup_1:
