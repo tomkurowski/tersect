@@ -695,18 +695,6 @@ static inline void extract_region(struct bitarray *dest_ba,
                                   const struct bitarray_interval *region,
                                   size_t *index, size_t *ncompressed)
 {
-    if (!region->start_index && !region->end_index) {
-        // Gap
-        *dest_ba = (struct bitarray) {
-            .size = 0,
-            .last_word = 0,
-            .ncompressed = 0,
-            .array = NULL,
-            .start_mask = 0,
-            .end_mask = 0
-        };
-        return;
-    }
     // The 'internal' indices are in terms of the storage word type
     uint64_t internal_start_index = region->start_index
                                     / bitarray_word_capacity - *ncompressed;
