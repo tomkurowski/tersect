@@ -26,6 +26,7 @@ SOFTWARE. */
 #define VCF_PARSER_H
 
 #include "alleles.h"
+#include "stringset.h"
 
 #include <stdio.h>
 
@@ -58,6 +59,7 @@ typedef struct ParserHandle_t {
     int *genotypes;
     char **samples;
     size_t sample_num;
+    struct StringSet *chromosome_names;
     int flags;
     FILE *file_handle;
     char current_chromosome[MAX_CHROMOSOME_NAME_LENGTH];

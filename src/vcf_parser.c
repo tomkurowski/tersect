@@ -131,6 +131,7 @@ int init_parser(const char *filename, int flags, VCF_PARSER *parser)
     if (parser->genotypes == NULL) {
         return VCF_PARSER_INIT_FAILURE;
     }
+    parser->chromosome_names = init_stringset();
     parser->n_alts = 0;
     parser->flags = flags;
     parser->current_result = ALLELE_NOT_FETCHED;
@@ -177,7 +178,11 @@ int fetch_next_allele(VCF_PARSER *parser)
             for (int i = 1; i < VCF_NUM_COLUMNS; ++i) {
                 columns[i] = strtok_r(NULL, "\t", &line_context);
             }
-            strcpy(parser->current_chromosome, columns[CHROM_COLUMN]);
+            if (strcmp(parser->current_chromosome, columns[CHROM_COLUMN])) {
+                // New chromosome
+                strcpy(parser->current_chromosome, columns[CHROM_COLUMN]);
+                stringset_add(parser->chromosome_names, columns[CHROM_COLUMN]);
+            }
             parser->current_allele.position = atoi(columns[POS_COLUMN]);
             parser->current_allele.ref = columns[REF_COLUMN];
 
@@ -253,6 +258,7 @@ void close_parser(VCF_PARSER *parser)
     for (size_t i = 0; i < parser->sample_num; ++i) {
         free(parser->samples[i]);
     }
+    free_stringset(parser->chromosome_names);
     free(parser->samples);
     fclose(parser->file_handle);
 }
