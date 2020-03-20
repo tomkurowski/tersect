@@ -17,6 +17,7 @@ PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/hashmap.c"
     "${CMAKE_CURRENT_LIST_DIR}/heap.c"
     "${CMAKE_CURRENT_LIST_DIR}/snv.c"
+    "${CMAKE_CURRENT_LIST_DIR}/stringset.c"
     "${CMAKE_CURRENT_LIST_DIR}/vcf_parser.c"
     "${CMAKE_CURRENT_LIST_DIR}/vcf_writer.c"
 
