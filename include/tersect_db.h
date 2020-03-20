@@ -29,6 +29,7 @@ SOFTWARE. */
 #include "bitarray.h"
 #include "errorc.h"
 
+#include <stdbool.h>
 #include <stdint.h>
 
 /* Database operation flags */
@@ -105,6 +106,7 @@ void tersect_db_get_chromosomes(const tersect_db *tdb,
                                 size_t *nchroms, struct chromosome **chroms);
 void tersect_db_get_chromosome(const tersect_db *tdb, const char *name,
                                struct chromosome *chrom);
+bool tersect_db_contains_chromosome(const tersect_db *tdb, const char *name);
 void tersect_db_get_interval(const tersect_db *tdb,
                              const struct genomic_interval *gi,
                              struct tersect_db_interval *ti);

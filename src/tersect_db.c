@@ -727,6 +727,11 @@ void tersect_db_get_chromosome(const tersect_db *tdb, const char *name,
     load_chromosome(tdb, chr_hdr, chrom);
 }
 
+bool tersect_db_contains_chromosome(const tersect_db *tdb, const char *name)
+{
+    return tersect_db_find_chromosome(tdb, name) != NULL;
+}
+
 void tersect_db_get_interval(const tersect_db *tdb,
                              const struct genomic_interval *gi,
                              struct tersect_db_interval *ti)
