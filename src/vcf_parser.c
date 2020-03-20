@@ -87,6 +87,16 @@ static inline int get_genotype_code(char *gt)
     }
 }
 
+static inline void reset_parser(VCF_PARSER *parser)
+{
+    // TODO: rewind without re-opening for non-gzipped files
+    char filename[MAX_FILENAME_LENGTH];
+    strcpy(filename, parser->filename);
+    int flags = parser->flags;
+    close_parser(parser);
+    init_parser(filename, flags, parser);
+}
+
 int is_gzipped(const char *filename)
 {
     FILE *fh = fopen(filename, "rb");
@@ -206,6 +216,31 @@ const char *goto_next_chromosome(VCF_PARSER *parser)
             return parser->current_chromosome;
         }
     }
+    return NULL;
+}
+
+const char *goto_chromosome(VCF_PARSER *parser, const char *chromosome)
+{
+    // TODO: Keep track of previously seen chromosomes to make this more
+    // sensible and return to their positions instead of re-reading the file.
+    if (!strcmp(parser->current_chromosome, chromosome)) {
+        // Already on intended chromosome
+        // TODO: rewind to chromosome start
+        return parser->current_chromosome;
+    }
+    while (goto_next_chromosome(parser) != NULL) {
+        if (!strcmp(parser->current_chromosome, chromosome)) {
+            return parser->current_chromosome;
+        }
+    }
+    // Rewinding and retrying once if the file end was reached
+    reset_parser(parser);
+    while (goto_next_chromosome(parser) != NULL) {
+        if (!strcmp(parser->current_chromosome, chromosome)) {
+            return parser->current_chromosome;
+        }
+    }
+    // Chromosome could not be found
     return NULL;
 }
 

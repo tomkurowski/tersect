@@ -73,6 +73,7 @@ typedef struct ParserHandle_t {
 int init_parser(const char *filename, int flags, VCF_PARSER *parser);
 int fetch_next_allele(VCF_PARSER *parser);
 const char *goto_next_chromosome(VCF_PARSER *parser);
+const char *goto_chromosome(VCF_PARSER *parser, const char *chromosome);
 int parser_allele_cmp(const void *a, const void *b);
 void close_parser(VCF_PARSER *parser);
 
