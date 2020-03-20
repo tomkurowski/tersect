@@ -95,6 +95,10 @@ static error_t import_files(tersect_db *tdb,
                             const int file_num,
                             char **filenames,
                             int parser_flags);
+static inline int load_chromosome_queue(const char *chromosome,
+                                        int parser_count,
+                                        struct parser_wrapper *parsers,
+                                        Heap *queue);
 static inline int load_next_chromosome_queue(Heap *queue,
                                              char *chromosome,
                                              struct parser_wrapper *parsers,
