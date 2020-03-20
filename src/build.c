@@ -307,6 +307,20 @@ static inline int load_next_chromosome_queue(Heap *queue,
     return queue->size;
 }
 
+static inline int load_chromosome_queue(const char *chromosome,
+                                        int parser_count,
+                                        struct parser_wrapper *parsers,
+                                        Heap *queue)
+{
+    clear_heap(queue);
+    for (int i = 0; i < parser_count; ++i) {
+        if (goto_chromosome(&parsers[i].parser, chromosome) != NULL) {
+            heap_push(queue, &parsers[i]);
+        }
+    }
+    return queue->size;
+}
+
 static inline uint32_t process_chromosome_queue(tersect_db *tdb, Heap *queue,
                                                 struct variant *var_container)
 {
