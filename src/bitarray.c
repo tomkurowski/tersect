@@ -505,7 +505,12 @@ static inline void bitarray_resize_internal(struct bitarray *ba,
 
 static inline void bitarray_grow(struct bitarray *ba)
 {
-    bitarray_resize_internal(ba, ba->size * GROWTH_FACTOR);
+    size_t new_size = ba->size * GROWTH_FACTOR;
+    if (new_size == ba->size) {
+        // Grow size by at least one word
+        new_size = ba->size + 1;
+    }
+    bitarray_resize_internal(ba, new_size);
 }
 
 void bitarray_resize(struct bitarray *ba, uint64_t new_size)
