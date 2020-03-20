@@ -223,6 +223,10 @@ const char *goto_chromosome(VCF_PARSER *parser, const char *chromosome)
 {
     // TODO: Keep track of previously seen chromosomes to make this more
     // sensible and return to their positions instead of re-reading the file.
+    if (!strcmp(parser->current_chromosome, chromosome)) {
+        // TODO: may need to rewind to the start
+        return parser->current_chromosome;
+    }
     while (goto_next_chromosome(parser) != NULL) {
         if (!strcmp(parser->current_chromosome, chromosome)) {
             return parser->current_chromosome;
