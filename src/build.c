@@ -99,10 +99,8 @@ static inline int load_chromosome_queue(const char *chromosome,
                                         int parser_count,
                                         struct parser_wrapper *parsers,
                                         Heap *queue);
-static inline int load_next_chromosome_queue(Heap *queue,
-                                             char *chromosome,
-                                             struct parser_wrapper *parsers,
-                                             int parser_num);
+static char *next_unprocessed_chromosome(tersect_db *tdb, int parser_count,
+                                         struct parser_wrapper *parsers);
 static inline uint32_t process_chromosome_queue(tersect_db *tdb, Heap *queue,
                                                 struct variant *var_container);
 
@@ -184,6 +182,26 @@ error_t tersect_build_database(int argc, char **argv)
 }
 
 /**
+ * Finds the next unprocessed chromosome among the file parsers by name.
+ */
+static char *next_unprocessed_chromosome(tersect_db *tdb,
+                                         int parser_count,
+                                         struct parser_wrapper *parsers)
+{
+    for (int i = 0; i < parser_count; ++i) {
+        struct StringSetIterator it = stringset_iterator(parsers[i].parser
+                                                                   .chromosome_names);
+        char *chromosome;
+        while ((chromosome = stringset_iterator_next(&it)) != NULL) {
+            if (!tersect_db_contains_chromosome(tdb, chromosome)) {
+                return chromosome;
+            }
+        }
+    }
+    return NULL;
+}
+
+/**
  * Builds a database out of k files via a queue-based k-way merge.
  */
 static error_t import_files(tersect_db *tdb,
@@ -200,7 +218,7 @@ static error_t import_files(tersect_db *tdb,
         rc = E_ALLOC;
         goto cleanup_1;
     }
-    char current_chromosome[MAX_CHROMOSOME_NAME_LENGTH] = "";
+    // char current_chromosome[MAX_CHROMOSOME_NAME_LENGTH] = "";
     Heap *queue = init_heap(file_num, wrapped_parser_cmp);
     if (!queue) {
         rc = E_ALLOC;
@@ -231,10 +249,16 @@ static error_t import_files(tersect_db *tdb,
         }
         goto_next_chromosome(&parsers[i].parser);
     }
-    while (load_next_chromosome_queue(queue, current_chromosome,
-                                      parsers, file_num)) {
-        uint32_t var_count = process_chromosome_queue(tdb, queue,
-                                                      var_container);
+    char current_chromosome[MAX_CHROMOSOME_NAME_LENGTH];
+    char *next_chrom;
+    while ((next_chrom = next_unprocessed_chromosome(tdb, file_num,
+                                                     parsers)) != NULL) {
+        strcpy(current_chromosome, next_chrom);
+        load_chromosome_queue(current_chromosome, file_num, parsers, queue);
+        if (!queue->size) {
+            continue;
+        }
+        uint32_t var_count = process_chromosome_queue(tdb, queue, var_container);
         // Taking the position of the last variant in the chromosome as proxy
         // for the chromosome size
         tersect_db_add_chromosome(tdb, current_chromosome,
@@ -274,41 +298,6 @@ cleanup_2:
 cleanup_1:
     free(var_container);
     return rc;
-}
-
-static inline int load_next_chromosome_queue(Heap *queue,
-                                             char *chromosome,
-                                             struct parser_wrapper *parsers,
-                                             int parser_num)
-{
-    // Save currently set chromosome in order to skip it
-    char previous_chromosome[MAX_CHROMOSOME_NAME_LENGTH];
-    strcpy(previous_chromosome, chromosome);
-    strcpy(chromosome, ""); // Clear chromosome
-    clear_heap(queue);
-    for (int i = 0; i < parser_num; ++i) {
-        if (!strcmp(parsers[i].parser.current_chromosome, previous_chromosome)) {
-            goto_next_chromosome(&parsers[i].parser);
-        }
-        if (parsers[i].parser.current_result == ALLELE_NOT_FETCHED) {
-            continue; // End of file reached, skip parser
-        }
-        if (!strlen(chromosome)) {
-            // Set next chromosome
-            strcpy(chromosome, parsers[i].parser.current_chromosome);
-            heap_push(queue, &parsers[i]);
-            continue;
-        }
-        // Go to set chromosome and put parser on heap if found
-        while (strcmp(parsers[i].parser.current_chromosome, chromosome)
-               && parsers[i].parser.current_result != ALLELE_NOT_FETCHED) {
-            goto_next_chromosome(&parsers[i].parser);
-        }
-        if (!strcmp(parsers[i].parser.current_chromosome, chromosome)) {
-            heap_push(queue, &parsers[i]);
-        }
-    }
-    return queue->size;
 }
 
 static inline int load_chromosome_queue(const char *chromosome,
