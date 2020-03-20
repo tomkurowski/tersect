@@ -123,6 +123,7 @@ int init_parser(const char *filename, int flags, VCF_PARSER *parser)
         return VCF_PARSER_INIT_FAILURE;
     }
     strcpy(parser->filename, filename);
+    strcpy(parser->current_chromosome, "");
     parser->line_buffer = NULL;
     parser->buffer_size = 0;
     load_metadata(parser);
