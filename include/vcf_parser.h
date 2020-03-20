@@ -32,6 +32,9 @@ SOFTWARE. */
 #define VCF_PARSER_INIT_SUCCESS     0
 #define VCF_PARSER_INIT_FAILURE     1
 
+#define VCF_PARSER_CHROM_NOT_FOUND  0
+#define VCF_PARSER_CHROM_FOUND      1
+
 #define ALLELE_FETCHED              1
 #define ALLELE_NOT_FETCHED          0
 
@@ -69,7 +72,7 @@ typedef struct ParserHandle_t {
 
 int init_parser(const char *filename, int flags, VCF_PARSER *parser);
 int fetch_next_allele(VCF_PARSER *parser);
-void goto_next_chromosome(VCF_PARSER *parser);
+const char *goto_next_chromosome(VCF_PARSER *parser);
 int parser_allele_cmp(const void *a, const void *b);
 void close_parser(VCF_PARSER *parser);
 

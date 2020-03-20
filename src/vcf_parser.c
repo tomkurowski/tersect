@@ -196,16 +196,17 @@ int fetch_next_allele(VCF_PARSER *parser)
     return parser->current_result = ALLELE_NOT_FETCHED;
 }
 
-void goto_next_chromosome(VCF_PARSER *parser)
+const char *goto_next_chromosome(VCF_PARSER *parser)
 {
     char previous_chromosome[MAX_CHROMOSOME_NAME_LENGTH];
     strcpy(previous_chromosome, parser->current_chromosome);
     while (fetch_next_allele(parser) != ALLELE_NOT_FETCHED) {
         if (strcmp(parser->current_chromosome, previous_chromosome)) {
             // Reached next chromosome
-            return;
+            return parser->current_chromosome;
         }
     }
+    return NULL;
 }
 
 void close_parser(VCF_PARSER *parser)
