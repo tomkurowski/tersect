@@ -63,7 +63,7 @@ static int parser_flags = 0;
  * in a specific genome file.
  */
 struct parser_wrapper {
-    VCF_PARSER *parser;
+    VCF_PARSER parser;
     struct bitarray **ba;
 };
 
@@ -87,8 +87,8 @@ static void usage(FILE *stream)
  */
 int wrapped_parser_cmp(const void *a, const void *b)
 {
-    return parser_allele_cmp(((struct parser_wrapper *)a)->parser,
-                             ((struct parser_wrapper *)b)->parser);
+    return parser_allele_cmp(&((struct parser_wrapper *)a)->parser,
+                             &((struct parser_wrapper *)b)->parser);
 }
 
 static error_t import_files(tersect_db *tdb,
@@ -205,26 +205,27 @@ static error_t import_files(tersect_db *tdb,
     // Open parsers & prepare bit arrays
     HashMap *sample_names = init_hashmap(SAMPLES_PER_FILE * file_num);
     for (int i = 0; i < file_num; ++i) {
-        parsers[i].parser = init_parser(filenames[i], parser_flags);
-        if (parsers[i].parser == NULL) {
+        if (init_parser(filenames[i], parser_flags, &parsers[i].parser)
+            != VCF_PARSER_INIT_SUCCESS) {
             rc = E_VCF_PARSE_FILE;
             goto cleanup_3;
+
         }
-        parsers[i].ba = malloc(parsers[i].parser->sample_num
+        parsers[i].ba = malloc(parsers[i].parser.sample_num
                                * sizeof *parsers[i].ba);
-        for (size_t j = 0; j < parsers[i].parser->sample_num; ++j) {
+        for (size_t j = 0; j < parsers[i].parser.sample_num; ++j) {
             if (hashmap_get(sample_names,
-                            parsers[i].parser->samples[j]) != NULL) {
+                            parsers[i].parser.samples[j]) != NULL) {
                 rc = E_BUILD_DUPSAMPLE;
                 goto cleanup_3;
             } else {
-                hashmap_insert(sample_names, parsers[i].parser->samples[j],
-                               parsers[i].parser->samples[j]);
+                hashmap_insert(sample_names, parsers[i].parser.samples[j],
+                               parsers[i].parser.samples[j]);
             }
             parsers[i].ba[j] = init_bitarray(INITIAL_ALLELE_NUM);
-            tersect_db_add_genome(tdb, parsers[i].parser->samples[j]);
+            tersect_db_add_genome(tdb, parsers[i].parser.samples[j]);
         }
-        fetch_next_allele(parsers[i].parser);
+        fetch_next_allele(&parsers[i].parser);
     }
     while (load_next_chromosome_queue(queue, current_chromosome,
                                       parsers, file_num)) {
@@ -243,11 +244,11 @@ static error_t import_files(tersect_db *tdb,
             .end_index = var_count - 1
         };
         for (int i = 0; i < file_num; ++i) {
-            for (size_t j = 0; j < parsers[i].parser->sample_num; ++j) {
+            for (size_t j = 0; j < parsers[i].parser.sample_num; ++j) {
                 struct bitarray ba;
                 bitarray_resize(parsers[i].ba[j], var_count);
                 bitarray_extract_region(&ba, parsers[i].ba[j], &chr_interval);
-                tersect_db_add_bitarray(tdb, parsers[i].parser->samples[j],
+                tersect_db_add_bitarray(tdb, parsers[i].parser.samples[j],
                                         current_chromosome, &ba);
                 clear_bitarray(parsers[i].ba[j]);
             }
@@ -255,10 +256,10 @@ static error_t import_files(tersect_db *tdb,
     }
     // Close parsers
     for (int i = 0; i < file_num; ++i) {
-        for (size_t j = 0; j < parsers[i].parser->sample_num; ++j) {
+        for (size_t j = 0; j < parsers[i].parser.sample_num; ++j) {
             free_bitarray(parsers[i].ba[j]);
         }
-        close_parser(parsers[i].parser);
+        close_parser(&parsers[i].parser);
         free(parsers[i].ba);
     }
     free_heap(queue);
@@ -282,24 +283,24 @@ static inline int load_next_chromosome_queue(Heap *queue,
     strcpy(chromosome, ""); // Clear chromosome
     clear_heap(queue);
     for (int i = 0; i < parser_num; ++i) {
-        if (!strcmp(parsers[i].parser->current_chromosome, previous_chromosome)) {
-            goto_next_chromosome(parsers[i].parser);
+        if (!strcmp(parsers[i].parser.current_chromosome, previous_chromosome)) {
+            goto_next_chromosome(&parsers[i].parser);
         }
-        if (parsers[i].parser->current_result == ALLELE_NOT_FETCHED) {
+        if (parsers[i].parser.current_result == ALLELE_NOT_FETCHED) {
             continue; // End of file reached, skip parser
         }
         if (!strlen(chromosome)) {
             // Set next chromosome
-            strcpy(chromosome, parsers[i].parser->current_chromosome);
+            strcpy(chromosome, parsers[i].parser.current_chromosome);
             heap_push(queue, &parsers[i]);
             continue;
         }
         // Go to set chromosome and put parser on heap if found
-        while (strcmp(parsers[i].parser->current_chromosome, chromosome)
-               && parsers[i].parser->current_result != ALLELE_NOT_FETCHED) {
-            goto_next_chromosome(parsers[i].parser);
+        while (strcmp(parsers[i].parser.current_chromosome, chromosome)
+               && parsers[i].parser.current_result != ALLELE_NOT_FETCHED) {
+            goto_next_chromosome(&parsers[i].parser);
         }
-        if (!strcmp(parsers[i].parser->current_chromosome, chromosome)) {
+        if (!strcmp(parsers[i].parser.current_chromosome, chromosome)) {
             heap_push(queue, &parsers[i]);
         }
     }
@@ -318,25 +319,24 @@ static inline uint32_t process_chromosome_queue(tersect_db *tdb, Heap *queue,
 
     char chromosome[MAX_CHROMOSOME_NAME_LENGTH];
     strcpy(chromosome,
-           ((struct parser_wrapper *)heap_peek(queue))->parser
-                                                      ->current_chromosome);
+           ((struct parser_wrapper *)heap_peek(queue))->parser.current_chromosome);
     uint32_t var_count = 0;
     while (queue->size) {
         // Alternatively could pop & push, but it is slower
         struct parser_wrapper *pwr = heap_peek(queue);
-        if (allele_cmp(&previous_allele, &pwr->parser->current_allele)) {
-            if (tersect_db_insert_allele(tdb, &pwr->parser->current_allele,
+        if (allele_cmp(&previous_allele, &pwr->parser.current_allele)) {
+            if (tersect_db_insert_allele(tdb, &pwr->parser.current_allele,
                                          &var_container[var_count]) == SUCCESS) {
-                previous_allele.position = pwr->parser->current_allele.position;
-                strcpy(previous_allele.ref, pwr->parser->current_allele.ref);
-                strcpy(previous_allele.alt, pwr->parser->current_allele.alt);
-                for (size_t i = 0; i < pwr->parser->sample_num; ++i) {
+                previous_allele.position = pwr->parser.current_allele.position;
+                strcpy(previous_allele.ref, pwr->parser.current_allele.ref);
+                strcpy(previous_allele.alt, pwr->parser.current_allele.alt);
+                for (size_t i = 0; i < pwr->parser.sample_num; ++i) {
                     if (parser_flags & VCF_ONLY_HOMOZYGOUS) {
-                        if (pwr->parser->genotypes[i] != GENOTYPE_HOM_ALT) {
+                        if (pwr->parser.genotypes[i] != GENOTYPE_HOM_ALT) {
                             continue;
                         }
                     }
-                    if (pwr->parser->genotypes[i] != GENOTYPE_HOM_REF) {
+                    if (pwr->parser.genotypes[i] != GENOTYPE_HOM_REF) {
                         bitarray_set_bit(pwr->ba[i], var_count);
                     }
                 }
@@ -344,17 +344,17 @@ static inline uint32_t process_chromosome_queue(tersect_db *tdb, Heap *queue,
             }
         } else {
             // The same allele as previously
-            for (size_t i = 0; i < pwr->parser->sample_num; ++i) {
+            for (size_t i = 0; i < pwr->parser.sample_num; ++i) {
                 if (parser_flags & VCF_ONLY_HOMOZYGOUS) {
-                    if (pwr->parser->genotypes[i] != GENOTYPE_HOM_ALT) continue;
+                    if (pwr->parser.genotypes[i] != GENOTYPE_HOM_ALT) continue;
                 }
-                if (pwr->parser->genotypes[i] != GENOTYPE_HOM_REF) {
+                if (pwr->parser.genotypes[i] != GENOTYPE_HOM_REF) {
                     bitarray_set_bit(pwr->ba[i], var_count - 1);
                 }
             }
         }
-        if ((fetch_next_allele(pwr->parser) == ALLELE_NOT_FETCHED)
-            || strcmp(chromosome, pwr->parser->current_chromosome)) {
+        if ((fetch_next_allele(&pwr->parser) == ALLELE_NOT_FETCHED)
+            || strcmp(chromosome, pwr->parser.current_chromosome)) {
             // end of file or end of chromosome
             heap_pop(queue); // Remove parser from queue
         } else {

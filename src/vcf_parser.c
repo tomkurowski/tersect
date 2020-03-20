@@ -96,11 +96,10 @@ int is_gzipped(const char *filename)
     return byte1 == (char)0x1f && byte2 == (char)0x8b;
 }
 
-VCF_PARSER *init_parser(const char *filename, int flags)
+int init_parser(const char *filename, int flags, VCF_PARSER *parser)
 {
-    VCF_PARSER *parser = malloc(sizeof *parser);
     if (access(filename, F_OK) != 0) {
-        return NULL;
+        return VCF_PARSER_INIT_FAILURE;
     }
     if (is_gzipped(filename)) {
         char *cmd = malloc(strlen(filename) + 8); // strlen of "zcat \'%s\'"
@@ -111,17 +110,20 @@ VCF_PARSER *init_parser(const char *filename, int flags)
         parser->file_handle = fopen(filename, "r");
     }
     if (parser->file_handle == NULL) {
-        return NULL;
+        return VCF_PARSER_INIT_FAILURE;
     }
     strcpy(parser->filename, filename);
     parser->line_buffer = NULL;
     parser->buffer_size = 0;
     load_metadata(parser);
     parser->genotypes = malloc(parser->sample_num * sizeof *parser->genotypes);
+    if (parser->genotypes == NULL) {
+        return VCF_PARSER_INIT_FAILURE;
+    }
     parser->n_alts = 0;
     parser->flags = flags;
     parser->current_result = ALLELE_NOT_FETCHED;
-    return parser;
+    return VCF_PARSER_INIT_SUCCESS;
 }
 
 /* Compare most recent alleles from two parsers */
@@ -217,5 +219,4 @@ void close_parser(VCF_PARSER *parser)
     }
     free(parser->samples);
     fclose(parser->file_handle);
-    free(parser);
 }
