@@ -229,7 +229,7 @@ static error_t import_files(tersect_db *tdb,
             parsers[i].ba[j] = init_bitarray(INITIAL_ALLELE_NUM);
             tersect_db_add_genome(tdb, parsers[i].parser.samples[j]);
         }
-        fetch_next_allele(&parsers[i].parser);
+        goto_next_chromosome(&parsers[i].parser);
     }
     while (load_next_chromosome_queue(queue, current_chromosome,
                                       parsers, file_num)) {
