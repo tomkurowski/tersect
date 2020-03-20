@@ -33,6 +33,10 @@ struct StringSet {
     HashMap *map;
 };
 
+struct StringSetIterator {
+    HashIterator hm_iterator;
+};
+
 /**
  * Very basic unordered string set implementation using struct HashMap.
  */
@@ -43,5 +47,8 @@ void free_stringset(struct StringSet *set);
 void stringset_add(const struct StringSet *set, char *str);
 bool stringset_contains(const struct StringSet *set, char *str);
 uint32_t stringset_size(const struct StringSet *set);
+
+struct StringSetIterator stringset_iterator(const struct StringSet *set);
+char *stringset_iterator_next(struct StringSetIterator* it);
 
 #endif

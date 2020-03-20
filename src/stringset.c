@@ -56,3 +56,16 @@ uint32_t stringset_size(const struct StringSet *set)
 {
     return set->map->count;
 }
+
+struct StringSetIterator stringset_iterator(const struct StringSet *set)
+{
+    struct StringSetIterator it;
+    it.hm_iterator = hashmap_iterator(set->map);
+    return it;
+}
+
+char *stringset_iterator_next(struct StringSetIterator* it)
+{
+    hashmap_iterator_next(&it->hm_iterator);
+    return it->hm_iterator.key;
+}
