@@ -63,6 +63,7 @@ typedef struct ParserHandle_t {
     int flags;
     FILE *file_handle;
     char current_chromosome[MAX_CHROMOSOME_NAME_LENGTH];
+    uint64_t current_allele_index;
     char *alt_alleles[MAX_ALT_ALLELES];
     int n_alts;
     char *line_buffer;

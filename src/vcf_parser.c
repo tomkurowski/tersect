@@ -124,6 +124,7 @@ int init_parser(const char *filename, int flags, VCF_PARSER *parser)
     }
     strcpy(parser->filename, filename);
     strcpy(parser->current_chromosome, "");
+    parser->current_allele_index = 0;
     parser->line_buffer = NULL;
     parser->buffer_size = 0;
     load_metadata(parser);
@@ -165,6 +166,8 @@ int fetch_next_allele(VCF_PARSER *parser)
             if (parser->current_allele.alt[1] == '\0'
                 && parser->current_allele.ref[1] == '\0') continue;
         }
+        // Increase allele index (ordinal position of allee in chromosome)
+        ++(parser->current_allele_index);
         return parser->current_result = ALLELE_FETCHED;
     }
     char *columns[VCF_NUM_COLUMNS];
@@ -182,6 +185,8 @@ int fetch_next_allele(VCF_PARSER *parser)
                 // New chromosome
                 strcpy(parser->current_chromosome, columns[CHROM_COLUMN]);
                 stringset_add(parser->chromosome_names, columns[CHROM_COLUMN]);
+                // Reset allele index
+                parser->current_allele_index = 0;
             }
             parser->current_allele.position = atoi(columns[POS_COLUMN]);
             parser->current_allele.ref = columns[REF_COLUMN];
@@ -229,7 +234,8 @@ const char *goto_chromosome(VCF_PARSER *parser, const char *chromosome)
 {
     // TODO: Keep track of previously seen chromosomes to make this more
     // sensible and return to their positions instead of re-reading the file.
-    if (!strcmp(parser->current_chromosome, chromosome)) {
+    if (!strcmp(parser->current_chromosome, chromosome)
+        && parser->current_allele_index <= 1) {
         // TODO: may need to rewind to the start
         return parser->current_chromosome;
     }
