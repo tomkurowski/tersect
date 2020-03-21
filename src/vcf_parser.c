@@ -87,16 +87,6 @@ static inline int get_genotype_code(char *gt)
     }
 }
 
-static inline void reset_parser(VCF_PARSER *parser)
-{
-    // TODO: rewind without re-opening for non-gzipped files
-    char filename[MAX_FILENAME_LENGTH];
-    strcpy(filename, parser->filename);
-    int flags = parser->flags;
-    close_parser(parser);
-    init_parser(filename, flags, parser);
-}
-
 int is_gzipped(const char *filename)
 {
     FILE *fh = fopen(filename, "rb");
@@ -106,7 +96,20 @@ int is_gzipped(const char *filename)
     return byte1 == (char)0x1f && byte2 == (char)0x8b;
 }
 
-int init_parser(const char *filename, int flags, VCF_PARSER *parser)
+static inline void reset_vcf_position(VCF_PARSER *parser)
+{
+    strcpy(parser->current_chromosome, "");
+    parser->current_allele_index = 0;
+    if (parser->line_buffer != NULL) {
+        free(parser->line_buffer);
+    }
+    parser->line_buffer = NULL;
+    parser->buffer_size = 0;
+    parser->n_alts = 0;
+    parser->current_result = ALLELE_NOT_FETCHED;
+}
+
+static inline int open_vcf_file(VCF_PARSER *parser, const char *filename)
 {
     if (access(filename, F_OK) != 0) {
         return VCF_PARSER_INIT_FAILURE;
@@ -123,19 +126,42 @@ int init_parser(const char *filename, int flags, VCF_PARSER *parser)
         return VCF_PARSER_INIT_FAILURE;
     }
     strcpy(parser->filename, filename);
-    strcpy(parser->current_chromosome, "");
-    parser->current_allele_index = 0;
     parser->line_buffer = NULL;
-    parser->buffer_size = 0;
+    reset_vcf_position(parser);
+    return VCF_PARSER_INIT_SUCCESS;
+}
+
+static inline void close_vcf_file(VCF_PARSER *parser)
+{
+    if (parser->line_buffer != NULL) {
+        free(parser->line_buffer);
+    }
+    fclose(parser->file_handle);
+}
+
+static inline void rewind_vcf_file(VCF_PARSER *parser)
+{
+    if (is_gzipped(parser->filename)) {
+        close_vcf_file(parser);
+        open_vcf_file(parser, parser->filename);
+    } else {
+        reset_vcf_position(parser);
+        rewind(parser->file_handle);
+    }
+}
+
+int init_parser(const char *filename, int flags, VCF_PARSER *parser)
+{
+    if (open_vcf_file(parser, filename) != VCF_PARSER_INIT_SUCCESS) {
+        return VCF_PARSER_INIT_FAILURE;
+    }
+    parser->flags = flags;
     load_metadata(parser);
     parser->genotypes = malloc(parser->sample_num * sizeof *parser->genotypes);
     if (parser->genotypes == NULL) {
         return VCF_PARSER_INIT_FAILURE;
     }
     parser->chromosome_names = init_stringset();
-    parser->n_alts = 0;
-    parser->flags = flags;
-    parser->current_result = ALLELE_NOT_FETCHED;
     return VCF_PARSER_INIT_SUCCESS;
 }
 
@@ -245,7 +271,7 @@ const char *goto_chromosome(VCF_PARSER *parser, const char *chromosome)
         }
     }
     // Rewinding and retrying once if the file end was reached
-    reset_parser(parser);
+    rewind_vcf_file(parser);
     while (goto_next_chromosome(parser) != NULL) {
         if (!strcmp(parser->current_chromosome, chromosome)) {
             return parser->current_chromosome;
@@ -257,14 +283,11 @@ const char *goto_chromosome(VCF_PARSER *parser, const char *chromosome)
 
 void close_parser(VCF_PARSER *parser)
 {
-    if (parser->line_buffer != NULL) {
-        free(parser->line_buffer);
-    }
     free(parser->genotypes);
     for (size_t i = 0; i < parser->sample_num; ++i) {
         free(parser->samples[i]);
     }
     free_stringset(parser->chromosome_names);
     free(parser->samples);
-    fclose(parser->file_handle);
+    close_vcf_file(parser);
 }
