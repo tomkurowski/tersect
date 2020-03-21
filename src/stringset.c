@@ -47,7 +47,7 @@ void stringset_add(const struct StringSet *set, char *str)
     hashmap_insert(set->map, str, &dummy);
 }
 
-bool stringset_contains(const struct StringSet *set, char *str)
+bool stringset_contains(const struct StringSet *set, const char *str)
 {
     return hashmap_get(set->map, str) != NULL;
 }

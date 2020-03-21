@@ -45,7 +45,7 @@ struct StringSet *init_stringset();
 void free_stringset(struct StringSet *set);
 
 void stringset_add(const struct StringSet *set, char *str);
-bool stringset_contains(const struct StringSet *set, char *str);
+bool stringset_contains(const struct StringSet *set, const char *str);
 uint32_t stringset_size(const struct StringSet *set);
 
 struct StringSetIterator stringset_iterator(const struct StringSet *set);
