@@ -156,6 +156,7 @@ int init_parser(const char *filename, int flags, VCF_PARSER *parser)
         return VCF_PARSER_INIT_FAILURE;
     }
     parser->flags = flags;
+    parser->chromosomes_indexed = false;
     load_metadata(parser);
     parser->genotypes = malloc(parser->sample_num * sizeof *parser->genotypes);
     if (parser->genotypes == NULL) {
@@ -253,11 +254,18 @@ const char *goto_next_chromosome(VCF_PARSER *parser)
             return parser->current_chromosome;
         }
     }
+    // End of file reached, all chromosomes indexed
+    parser->chromosomes_indexed = true;
     return NULL;
 }
 
 const char *goto_chromosome(VCF_PARSER *parser, const char *chromosome)
 {
+    if (parser->chromosomes_indexed
+        && !stringset_contains(parser->chromosome_names, chromosome)) {
+        // All chromosomes are known and this one is not among them
+        return NULL;
+    }
     // TODO: Keep track of previously seen chromosomes to make this more
     // sensible and return to their positions instead of re-reading the file.
     if (!strcmp(parser->current_chromosome, chromosome)
