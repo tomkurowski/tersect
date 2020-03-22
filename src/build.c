@@ -274,7 +274,6 @@ static error_t import_files(tersect_db *tdb,
         for (int i = 0; i < file_num; ++i) {
             for (size_t j = 0; j < parsers[i].parser.sample_num; ++j) {
                 struct bitarray ba;
-                bitarray_resize(parsers[i].ba[j], var_count);
                 bitarray_extract_region(&ba, parsers[i].ba[j], &chr_interval);
                 tersect_db_add_bitarray(tdb, parsers[i].parser.samples[j],
                                         current_chromosome, &ba);
